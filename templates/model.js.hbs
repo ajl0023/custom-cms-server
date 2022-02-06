@@ -1,0 +1,111 @@
+const { Model,snakeCaseMappers } = require("objection");
+const AjvValidator = require('objection').AjvValidator;
+
+class {{modelName}} extends Model {
+  static get tableName() {
+    return "{{tableName}}";
+  }
+  {{#if has_media}}
+  static async beforeDelete(ctx) {
+    const idsToDelete = await ctx.asFindQuery().select("parentId");
+    const imagesToDelete = [];
+    console.log(idsToDelete);
+    const Images = require("../image/image").model;
+    for (const item of idsToDelete) {
+      const images = await Images.query().where({ parentId: item.parentId });
+      const publidIds = images.map((item) => {
+        return item.public_id;
+      });
+      await deleteCloudinaryImages(publidIds);
+    }
+
+    ctx.cancelQuery();
+  }
+  {{/if}}
+
+    static get clientCols() {
+    return {
+      {{#each properties}}
+        {{#unless clientCols.is_foreign_key}}
+          {{#unless clientCols.is_generated}}
+            {{clientCols.name}}: {
+              type: '{{clientCols.type}}',
+              is_generated:{{clientCols.is_generated}},
+        
+              foreign_key:{{clientCols.is_foreign_key}},
+
+              {{#if clientCols.media}}
+              media: {{{clientCols.media}}},
+              {{/if}}
+              
+              required: {{clientCols.required}},
+          
+          },
+          {{/unless}}
+        {{/unless}}
+      {{/each}} 
+    }
+  }
+  {{#if is_parent}}
+  static async afterInsert(ctx) {
+    const ChildModel =
+      require(`../${ctx.context.child}/${ctx.context.child}`).model;
+
+    const res = await ChildModel.query().insert({ ...ctx.context.data });
+
+  }
+  {{/if}}
+  {{#if has_parent}}
+   static get superTable() {
+    return "category_master";
+  }
+  {{/if}}
+
+  static get jsonSchema() {
+    return {
+      type: 'object',
+  
+      properties: {
+        {{#each properties}}
+          {{#unless schema.is_generated}}
+            {{schema.name}}: {
+              type: '{{schema.type}}',
+              nullable: {{schema.nullable}}
+            },
+     
+          {{/unless}}
+        {{/each}}
+      }
+    }
+}
+
+{{#if has_media}}
+ static relationMappings = {
+    images: {
+      relation: Model.HasManyRelation,
+      modelClass: require("../image/image").model,
+      join: {
+        from: "{{tableName}}.parentId",
+        to: 'image.parentId'
+      }
+    },
+    thumbnail:{
+      relation: Model.HasOneRelation,
+      modelClass: require("../image/image").model,
+      join: {
+        from: "{{tableName}}.parentId",
+        to: 'image.parentId',
+        
+      },
+      modify:{
+          main:true
+        }
+    }
+  };
+{{/if}}
+
+}
+
+module.exports = {
+  model: {{modelName}},
+};
